@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spout Finance — Beta Teardown</title>
+<meta name="description" content="A critical teardown of Spout Finance: VRP harvesting stress-tested, tokenization trade-offs, and three reproducible bugs.">
+<style>
+:root{
+  --bg:#0a0e14; --panel:#121721; --panel2:#0f141d; --line:#1e2733;
+  --fg:#e6edf3; --dim:#8b98a8; --acc:#5eead4; --acc2:#a78bfa;
+  --bad:#ff7b72; --warn:#ffb454; --ok:#7ee787;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font:400 clamp(15px,3.9vw,17px)/1.68 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(94,234,212,.10), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 10%, rgba(167,139,250,.08), transparent);
+  background-attachment:fixed;
+}
+.wrap{max-width:760px;margin:0 auto;padding:clamp(1.4rem,5vw,3.2rem) clamp(1rem,4.5vw,1.6rem) 5rem}
+.kicker{
+  font:600 clamp(.64rem,2.6vw,.72rem)/1 var(--mono);
+  letter-spacing:.16em;text-transform:uppercase;color:var(--acc);
+  display:flex;align-items:center;gap:.55em;margin-bottom:1rem;flex-wrap:wrap
+}
+.kicker i{width:.5em;height:.5em;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc);flex:0 0 auto}
+h1{
+  font-size:clamp(1.75rem,8vw,2.7rem);line-height:1.12;font-weight:800;letter-spacing:-.024em;
+  margin:0 0 .7rem;
+  background:linear-gradient(120deg,#fff 15%,var(--acc) 60%,var(--acc2) 95%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.sub{color:var(--dim);font-size:clamp(.86rem,3.5vw,1rem);margin-bottom:1.6rem;max-width:58ch}
+.meta{
+  display:flex;flex-wrap:wrap;gap:.4rem .9rem;font:400 clamp(.7rem,2.9vw,.79rem)/1 var(--mono);
+  color:var(--dim);padding-bottom:1.5rem;border-bottom:1px solid var(--line);margin-bottom:2.2rem
+}
+.meta b{color:var(--fg);font-weight:600}
+h2{
+  font-size:clamp(1.22rem,5.4vw,1.62rem);font-weight:750;letter-spacing:-.015em;
+  margin:2.6rem 0 .9rem;line-height:1.25
+}
+h2 .n{color:var(--acc);font:700 .82em/1 var(--mono);margin-right:.5em;opacity:.85}
+h3{font-size:clamp(1rem,4.1vw,1.14rem);font-weight:650;margin:1.7rem 0 .6rem;line-height:1.3}
+p{margin:.75rem 0}
+ul,ol{margin:.75rem 0 .75rem 1.15em}
+li{margin:.4rem 0}
+a{color:var(--acc);text-decoration:none;border-bottom:1px solid rgba(94,234,212,.3)}
+strong{color:#fff;font-weight:650}
+em{color:var(--dim);font-style:italic}
+code{
+  font:500 .88em/1.5 var(--mono);background:#1a2130;color:var(--acc);
+  padding:.13em .42em;border-radius:5px;word-break:break-word
+}
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:14px;
+  padding:clamp(1rem,4vw,1.35rem);margin:1.3rem 0
+}
+.card.bad{border-color:rgba(255,123,114,.35);background:linear-gradient(180deg,rgba(255,123,114,.07),rgba(255,123,114,.02))}
+.card.warn{border-color:rgba(255,180,84,.32);background:linear-gradient(180deg,rgba(255,180,84,.07),rgba(255,180,84,.02))}
+.card.ok{border-color:rgba(126,231,135,.3);background:linear-gradient(180deg,rgba(126,231,135,.06),rgba(126,231,135,.015))}
+.sev{
+  display:inline-block;font:700 clamp(.6rem,2.5vw,.68rem)/1 var(--mono);
+  letter-spacing:.1em;text-transform:uppercase;padding:.42em .7em;border-radius:99px;margin-bottom:.7rem
+}
+.sev.bad{background:rgba(255,123,114,.15);color:var(--bad);border:1px solid rgba(255,123,114,.35)}
+.sev.warn{background:rgba(255,180,84,.14);color:var(--warn);border:1px solid rgba(255,180,84,.32)}
+.sev.ok{background:rgba(126,231,135,.13);color:var(--ok);border:1px solid rgba(126,231,135,.3)}
+.card h4{font-size:clamp(.98rem,4vw,1.1rem);font-weight:700;margin:0 0 .5rem}
+pre{
+  background:#080b11;border:1px solid var(--line);border-radius:10px;
+  padding:clamp(.8rem,3.4vw,1.05rem);overflow-x:auto;margin:.9rem 0;font-size:clamp(.66rem,2.9vw,.8rem)
+}
+pre code{background:none;padding:0;color:#c9d5e4;font-weight:400}
+pre .g{color:var(--ok)} pre .r{color:var(--bad)} pre .d{color:var(--dim)} pre .a{color:var(--acc)}
+table{width:100%;border-collapse:collapse;margin:1.1rem 0;font-size:clamp(.74rem,3.15vw,.87rem)}
+th,td{text-align:left;padding:.62em .55em;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font:600 .82em/1.3 var(--mono);text-transform:uppercase;letter-spacing:.07em}
+td:first-child{white-space:nowrap}
+.mono{font-family:var(--mono);font-size:.92em}
+.num{font-family:var(--mono);color:var(--acc);font-weight:600}
+.wf{margin:1.2rem 0}
+.wf .layer{
+  display:flex;align-items:center;gap:.7rem;margin:.42rem 0;padding:.7rem .85rem;
+  border-radius:9px;border:1px solid var(--line);background:var(--panel)
+}
+.wf .bar{flex:0 0 auto;height:1.5em;border-radius:5px}
+.wf .lbl{flex:1 1 auto;font-size:clamp(.72rem,3.1vw,.85rem);line-height:1.35}
+.wf .amt{flex:0 0 auto;font:600 clamp(.7rem,3vw,.82rem)/1 var(--mono)}
+blockquote{
+  border-left:3px solid var(--acc2);padding:.2rem 0 .2rem 1rem;margin:1.1rem 0;
+  color:var(--dim);font-size:.96em
+}
+hr{border:none;border-top:1px solid var(--line);margin:2.6rem 0}
+.foot{color:var(--dim);font-size:clamp(.72rem,3vw,.83rem);line-height:1.65}
+.toc{
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:clamp(.9rem,3.6vw,1.15rem) clamp(1rem,4vw,1.3rem);margin:0 0 2rem
+}
+.toc div{font:600 clamp(.62rem,2.5vw,.7rem)/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin-bottom:.7rem}
+.toc a{display:block;border:none;padding:.3rem 0;font-size:clamp(.8rem,3.4vw,.92rem)}
+.toc a span{color:var(--dim);font-family:var(--mono);font-size:.85em;margin-right:.55em}
+@media(prefers-reduced-motion:no-preference){
+  .card,.wf .layer{transition:transform .2s ease}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker"><i></i>Spout Finance · Beta Teardown · Sep 2026</div>
+<h1>Spout Finance is a distribution innovation — and that may be enough</h1>
+<p class="sub">A critical teardown of the covered-call-funded, zero-interest brokerage: what the VRP thesis gets right, where the risk engineering has holes, and three bugs you can reproduce in a shell.</p>
+
+<div class="meta">
+  <span><b>Scope</b> Testnet beta + 43 doc pages</span>
+  <span><b>Method</b> live inspection + byte-level HTTP analysis</span>
+  <span><b>Findings</b> 3 bugs · 11 recommendations</span>
+</div>
+
+<div class="toc">
+  <div>Contents</div>
+  <a href="#tldr"><span>00</span>The short version</a>
+  <a href="#what"><span>01</span>What Spout actually is</a>
+  <a href="#engine"><span>02</span>The engine, stress-tested</a>
+  <a href="#token"><span>03</span>Tokenization and its cost</a>
+  <a href="#bugs"><span>04</span>Bugs (reproducible)</a>
+  <a href="#ux"><span>05</span>UX findings</a>
+  <a href="#fix"><span>06</span>Recommendations</a>
+  <a href="#good"><span>07</span>What it gets right</a>
+</div>
+
+<h2 id="tldr"><span class="n">00</span>The short version</h2>
+<p>Spout is <strong>not a financial innovation</strong>. It is a <strong>distribution innovation</strong> — and that is exactly why it might work.</p>
+<p>The mechanism — write covered calls against pooled equity collateral, harvest the volatility risk premium, use the premium to subsidise zero-interest borrowing — has been run by institutional desks for decades. Two things Spout does that are genuinely new:</p>
+<ol>
+  <li><strong>It makes the VRP accessible at five shares.</strong> Options contracts are 100-share lots. A per-vault model locks out anyone holding less than a full lot. <em>Pool-level execution</em> is the single decision that opens this to non-institutional users.</li>
+  <li><strong>It wraps the strategy in a compliant token</strong> (Token-2022 + transfer-hook KYC + Proof of Reserve) so "tokenized US equities" isn't a euphemism for a synthetic IOU.</li>
+</ol>
+<p>Everything else — tranching, insurance fund, circuit breakers — is competent risk engineering, not novelty. That's fine. The question is whether the risk engineering actually holds.</p>
+
+<div class="card bad">
+  <span class="sev bad">Bug 01 · Medium</span>
+  <h4>The docs site corrupts every <code>$1</code>-prefixed dollar amount in server-rendered HTML</h4>
+  <p><code>$100k</code> → <code>00k</code>. <code>$200,000</code> → <code>00,000</code>. <code>$1.5m</code> → <code>.5m</code>. Byte-level reproducible with curl. Breaks the docs for crawlers, AI agents, and no-JS clients.</p>
+</div>
+
+<div class="card bad">
+  <span class="sev bad">Bug 02 · High (economic)</span>
+  <h4>Crypto-linked ETFs are exempt from the gap protection, and are the assets most prone to gaps</h4>
+  <p>IBIT / MSTR / BSOL have no earnings to skip — correct. But they trade only during US market hours while their underlying trades 24/7. <strong>A weekend move is a Monday-open gap, and it lands inside the cycle.</strong> 3 of 11 launch assets are exposed.</p>
+</div>
+
+<div class="card warn">
+  <span class="sev warn">Bug 03 · Medium (economic)</span>
+  <h4>The 2%-of-pool Insurance Fund is under-sized as first-loss</h4>
+  <p>It absorbs ~$200k at a $10m pool. A 40% gap on a 20%-weighted asset produces ~$400k of assignment loss. <strong>The fund is exhausted and Junior gets touched</strong> — contradicting the docs' claim that it "absorbs the worst observed weekly outcomes with substantial headroom."</p>
+</div>
+
+<hr>
+
+<h2 id="what"><span class="n">01</span>What Spout actually is</h2>
+<h3>The pitch, decoded</h3>
+<blockquote>"Borrow against your stocks at 0% interest."</blockquote>
+<p>Literally true — and that is what makes the wording dangerous. The borrower pays no interest because <strong>the collateral pays it for them</strong>, through an options premium stream that the borrower is implicitly short.</p>
+<p>The correct mental model is not "free loan." It is:</p>
+<blockquote>You are selling away the tail of your upside, on a weekly cadence, and the proceeds are being used to pay your loan's carry.</blockquote>
+<p>If you understand that, everything else in the docs follows. If you don't, you will treat your position as risk-free and get assigned in week seven.</p>
+<div class="card warn">
+  <span class="sev warn">Recommendation · P0</span>
+  <p>The app should not display "0% interest" without a co-located, equally-weighted statement of what the borrower gives up. This isn't a compliance checkbox — it's the difference between an informed user and a future class action.</p>
+</div>
+
+<h3>Who this is for — and who it isn't</h3>
+<p>The docs are unusually honest here. <em>"What Borrowers Should Know"</em> states you are exposed to collateral price and to assignment, and that <em>"the protocol does not introduce any new failure mode that does not already exist for someone who simply holds the underlying share."</em></p>
+<p>That is <strong>mostly</strong> true, with one exception: a buy-and-hold shareholder is <em>not</em> exposed to a weekly cadence. A Spout borrower faces <strong>dozens of independent assignment draws per year</strong>. The distributional difference matters for anyone comparing the two.</p>
+
+<hr>
+
+<h2 id="engine"><span class="n">02</span>The engine, stress-tested</h2>
+<h3>01 · Where the premium actually comes from</h3>
+<p>The docs correctly identify three price-insensitive option buyers:</p>
+<ol>
+  <li><strong>Pension funds and asset managers</strong> buying protective puts and collars under fiduciary mandate — price-insensitive by construction.</li>
+  <li><strong>Retail call buyers</strong> treating OTM calls as lottery tickets — persistently overpaying for implied vol in aggregate.</li>
+  <li><strong>Dealer hedging flow</strong> — mechanically creating further demand at certain strikes.</li>
+</ol>
+<p>All three push <strong>implied vol above realised vol</strong>. This is the <strong>Volatility Risk Premium</strong>, one of the best-documented anomalies in finance. This is the strongest part of the thesis — it is not arbitrage, it is not magic, and the docs say so. Credit where due.</p>
+
+<h3>02 · The crypto-ETF gap hole</h3>
+<p>The docs describe the earnings skip as the protection against gap risk:</p>
+<blockquote>"For single-name equities, the engine does not run cycles through earnings... This protects every participant from the worst of gap risk."</blockquote>
+<p>And for IBIT the roster note reads: <em>"ETF, no earnings skip needed."</em></p>
+<p><strong>This is where the reasoning breaks.</strong> It's correct that IBIT has no earnings. But the earnings skip isn't really about earnings — <strong>it's about scheduled, discontinuous, unhedgeable price jumps.</strong> Crypto is the purest generator of exactly that, and it generates them <strong>every weekend</strong>:</p>
+<ul>
+  <li>BTC / ETH / SOL trade 24/7. IBIT, MSTR, BSOL trade only during US market hours.</li>
+  <li>A weekend move in the underlying is a <strong>Monday-open gap</strong> in the ETF.</li>
+  <li>The cycle runs <strong>Friday close → Friday close</strong>. A weekend gap lands <strong>inside the cycle</strong>, with no opportunity to roll the strike.</li>
+</ul>
+<p>So the asset class <em>exempt from</em> the gap protection is also the class with the <em>highest frequency of gaps</em>. The roster devotes <strong>3 of 11 slots (27%)</strong> to crypto-linked exposure.</p>
+<p><strong>Why "wide strikes" don't save it:</strong> strike selection handles <em>continuous diffusion</em>. It does not handle a <strong>discrete weekend jump</strong> — the strike was set Friday against Friday's price, and there is no trading between Friday close and Monday open to adjust. High-vol names get wider strikes, but the crypto complex can gap more than a week's realised vol in a single weekend.</p>
+<div class="card bad">
+  <span class="sev bad">Recommendations · P0</span>
+  <ol>
+    <li><strong>Publish per-asset strike distance in σ terms</strong> ("1.5σ weekly"). "Wider for MSTR" is not a number a user can reason about.</li>
+    <li><strong>For crypto-linked names, use a Friday→Monday cadence</strong> so the weekend is a <em>settlement boundary</em> rather than an exposure window — or move them to biweekly.</li>
+    <li><strong>Publish realised assignment frequency per asset</strong> after 8 weeks live. This is the one number that tells you whether the strike philosophy works, and nobody outside Spout has it.</li>
+  </ol>
+</div>
+
+<h3>03 · Is the 2% Insurance Fund enough?</h3>
+<p>The loss waterfall, as documented:</p>
+<div class="wf">
+  <div class="layer">
+    <div class="bar" style="width:11px;background:var(--bad)"></div>
+    <div class="lbl"><strong>1 · Insurance Fund</strong> — first-loss, funded by 20% of protocol fee</div>
+    <div class="amt" style="color:var(--bad)">$200k</div>
+  </div>
+  <div class="layer">
+    <div class="bar" style="width:44px;background:var(--warn)"></div>
+    <div class="lbl"><strong>2 · Junior Tranche</strong> — second-loss, ~32% APY, 45-day notice</div>
+    <div class="amt" style="color:var(--warn)">$1.5m</div>
+  </div>
+  <div class="layer">
+    <div class="bar" style="width:120px;background:var(--ok)"></div>
+    <div class="lbl"><strong>3 · Senior Tranche</strong> — last resort, ~9% APY</div>
+    <div class="amt" style="color:var(--ok)">$8.5m</div>
+  </div>
+</div>
+<p><em>Figures at the docs' own $10m reference pool.</em></p>
+<p>Combined first-loss buffer = <strong>$1.7m = 17% of pool</strong>. Senior is genuinely well-protected; a &gt;17% pool-wide loss is the threshold. <strong>That part is sound.</strong></p>
+<p><strong>The problem is the composition.</strong> The Insurance Fund is described as absorbing losses "from dollar one," and the docs claim it alone handles <em>"the worst observed weekly outcomes with substantial headroom."</em> Run the arithmetic on a <strong>single-asset event</strong>:</p>
+<pre><code><span class="d">Assumption:</span> one supported asset = <span class="a">20% of pool</span> ($2,000,000 exposure)
+<span class="d">Event:</span>      <span class="a">+40% gap</span> through the strike in one cycle (plausible for MSTR/BSOL)
+
+<span class="d">Assignment loss</span> ≈ exposure × gap beyond strike × LTV factor
+                ≈ $2,000,000 × 40% × 50% = <span class="r">$400,000</span>
+<span class="d">Insurance Fund capacity:</span>            <span class="r">$200,000</span>
+                          ─────────────────────────
+                          → FUND EXHAUSTED. Loss flows to Junior.</code></pre>
+<p><strong>The claim and the arithmetic don't reconcile</strong> unless the backtest's "worst weekly outcome" is much milder than a 40% single-name gap. A 40% weekly move is not a tail event for MSTR — it has happened.</p>
+<p>This isn't fatal — the Junior Tranche exists precisely to absorb this, and $1.5m of second-loss is a real buffer. But a fund <em>sized in dollars against a pool that is 27% crypto-linked</em> should arguably be sized by <strong>portfolio gap risk</strong>, not by AUM.</p>
+<div class="card warn">
+  <span class="sev warn">Recommendations · P1</span>
+  <ol>
+    <li><strong>Publish the backtest's worst observed weekly outcome per asset</strong>, in percentage terms. The current claim is unverifiable as written.</li>
+    <li><strong>Reconsider the flat 2% target</strong> — a volatility-weighted target (or per-asset sub-fund) would be more honest.</li>
+    <li><strong>The circuit breaker fires too late.</strong> It's tied to insurance-fund health, so it fires <em>after</em> a drawdown. A trigger on <strong>strike-crossing probability</strong> would be pre-emptive.</li>
+  </ol>
+</div>
+
+<h3>04 · Where Junior's 32% really comes from</h3>
+<p>Unpack the tranching at the docs' own example: $30,000 gross premium → $24,000 after the 20% protocol fee → $11,400 to Senior's 7% priority → $12,600 excess → Senior takes 25% ($3,150), Junior takes 75% ($9,450).</p>
+<p><strong>Junior's ~32% is therefore not a classic risk premium — it's a levered residual claim on the same VRP, plus thin compensation for being second-loss.</strong> In a low-vol regime the residual shrinks fast, and Junior's realised yield collapses toward the Senior floor <em>while its loss exposure stays constant</em>. The asymmetry is real and the docs don't quantify it.</p>
+<div class="card warn">
+  <span class="sev warn">Recommendation · P1</span>
+  <p>Publish a <strong>Junior yield sensitivity table</strong> across vol regimes (VIX 12 / 18 / 30). A lender choosing Junior at 32% should see what that becomes at VIX 12 <em>before</em> depositing.</p>
+</div>
+
+<hr>
+
+<h2 id="token"><span class="n">03</span>Tokenization and its cost</h2>
+<h3>Token-2022 + transfer-hook KYC</h3>
+<blockquote>"spAssets use Solana's Token-2022 standard with a transfer hook that enforces wallet-level KYC. Tokens cannot move to non-verified wallets."</blockquote>
+<p><strong>What this buys:</strong> a genuinely regulated equity-backed instrument onchain. Without the hook, an equity-backed token is either freely transferable (a securities-law problem) or a permissioned database with a token interface. The hook threads the needle.</p>
+<p><strong>What it costs — and the docs should say this plainly:</strong> a transfer hook means <strong>spAssets are not composable.</strong> They can't be:</p>
+<ul>
+  <li>used as collateral in a third-party lending market,</li>
+  <li>deposited into a DEX liquidity pool,</li>
+  <li>used in any permissionless DeFi primitive,</li>
+</ul>
+<p>unless that primitive is itself KYC-gated. <strong>The "DeFi brokerage" framing sits awkwardly with this.</strong> An spAsset is a walled garden with a token interface — the correct regulatory choice, but not "DeFi" in the composability sense, and users will assume otherwise.</p>
+<div class="card warn">
+  <span class="sev warn">Recommendation · P0</span>
+  <p>State the composability limitation explicitly on the collateral page. "Your spAssets cannot be used elsewhere" is a material fact for someone deciding whether to lock equities here or somewhere else.</p>
+</div>
+
+<h3>Oracle design — the good and the unchecked</h3>
+<div class="card ok">
+  <span class="sev ok">Genuinely good</span>
+  <p><strong>The separation of price feed from Proof of Reserve is the correct architecture.</strong> The docs explain it well: <em>"This is not a price feed; it is a supply audit. It answers a different question: not 'what is the share worth?' but 'does the share actually exist?'"</em> That distinction is lost on most protocols.</p>
+  <p>The failure mode is also conservative: pause borrows and liquidations on a stale feed rather than act on a bad price.</p>
+</div>
+<p><strong>Unchecked:</strong> the docs call Stork the <strong>"primary"</strong> oracle. Primary implies a <strong>single point of failure for real-time pricing</strong>. The staleness and deadband guards mitigate but don't eliminate oracle risk — the protocol's own risk page admits this.</p>
+<div class="card warn">
+  <span class="sev warn">Recommendation · P1</span>
+  <p><strong>Publish the Proof-of-Reserve cadence and the attesting party.</strong> Real-time price + daily PoR is a very different risk profile from real-time price + quarterly PoR. For a product whose entire trust proposition is "the share actually exists," cadence is not a footnote.</p>
+</div>
+
+<hr>
+
+<h2 id="bugs"><span class="n">04</span>Bugs (reproducible)</h2>
+
+<div class="card bad">
+  <span class="sev bad">Bug 01 · Medium · code</span>
+  <h4>Server-rendered docs corrupt every <code>$1</code>-prefixed amount</h4>
+  <p>Fetching the docs with a crawler user-agent returns HTML in which <code>$1</code> is consumed as a replacement-string token and stray tags are emitted in its place.</p>
+<pre><code><span class="d">$ </span>curl -sL -A "Googlebot/2.1" https://spout.finance/docs/loss-waterfall
+
+<span class="d"># actual response bytes:</span>
+... Seeded at launch ($50k to <span class="r">&lt;div id="root"&gt;</span>00k) and continuously ...
+<span class="g"># expected: ($50k to $100k)</span>
+
+<span class="d"># https://spout.finance/docs/insurance-fund</span>
+... target is <span class="r">&lt;/div&gt;</span>00,000. Once the target is met ...
+<span class="g"># expected: target is $200,000.</span>
+
+<span class="d"># https://spout.finance/docs/lending-tranches</span>
+... Senior (85%) and <span class="r">&lt;div id="root"&gt;</span>.5m Junior (15%) ...
+<span class="g"># expected: and $1.5m Junior (15%)</span></code></pre>
+  <p><strong>Root cause:</strong> almost certainly <code>String.prototype.replace()</code> being called with an <strong>HTML string as the replacement argument</strong>. In JS replacement strings, <code>$1</code>–<code>$9</code> are backreferences to capture groups (and <code>$&amp;</code>, <code>$'</code>, <code>$`</code>, <code>$$</code> are special too). Any <code>$1</code> in the replacement payload is consumed. The stray <code>&lt;/div&gt;</code> is the leaked capture-group content.</p>
+  <p><strong>Fix:</strong> use a replacer <em>function</em> — <code>str.replace(re, () =&gt; html)</code> — which disables <code>$</code>-token interpretation entirely. One line.</p>
+  <p><strong>Why it matters more than it looks:</strong> browser users are unaffected (client hydration re-renders correctly), but <strong>crawlers, LLMs, and AI agents receive corrupted financial figures.</strong> Every downstream AI summary of Spout's economics will quote <code>0m</code> and <code>00,000</code>. For a protocol whose launch is being amplified by <strong>AI-agent-eligible bounties</strong>, shipping a docs site that misrenders to AI readers is a self-inflicted wound.</p>
+  <p><em>Affected surface: at least 10 occurrences across loss-waterfall, insurance-fund, lending-tranches.</em></p>
+</div>
+
+<div class="card bad">
+  <span class="sev bad">Bug 02 · High · economic</span>
+  <h4>Crypto-ETF weekend gap exposure</h4>
+  <p>Detailed in §02.02. <strong>Highest-severity finding in this report.</strong> The asset class exempt from gap protection is the class most prone to gaps.</p>
+</div>
+
+<div class="card warn">
+  <span class="sev warn">Bug 03 · Medium · economic</span>
+  <h4>Insurance Fund under-sized as first-loss</h4>
+  <p>Detailed in §02.03. The documented backtest claim and the arithmetic on a plausible single-asset gap event do not reconcile.</p>
+</div>
+
+<hr>
+
+<h2 id="ux"><span class="n">05</span>UX findings</h2>
+<div class="card">
+  <p><strong>Caveat, stated plainly:</strong> the beta requires an email + passcode issued via Telegram. I completed the landing, gate, and documentation flows and the public app shell; <strong>I did not execute an authenticated testnet borrow/deposit cycle.</strong> Findings below are labelled <span class="mono" style="color:var(--ok)">[VERIFIED]</span> (directly observed) or <span class="mono" style="color:var(--warn)">[INFERRED]</span> (derived from documented flow + app shell). I'd rather declare the boundary than pad this section.</p>
+</div>
+
+<h3>The access gate <span class="mono" style="color:var(--ok)">[VERIFIED]</span></h3>
+<p>The landing page presents:</p>
+<blockquote>"Testnet is live. You're among the first to try Spout Testnet. Drop in the email and passcode we sent you." → Email / Passcode / Unlock testnet</blockquote>
+<div class="card warn">
+  <span class="sev warn">Finding A · P0</span>
+  <p><strong>The gate is a dead end for a first-time visitor.</strong> There is <strong>no request-access affordance on the page itself.</strong> The only path to a passcode is a note buried inside a Superteam bounty description pointing at a Telegram handle. A user who lands on <code>beta.spout.finance</code> from anywhere else sees a wall with no door.</p>
+  <p><strong>Fix:</strong> an inline "Request access" link that opens the Telegram deep-link or submits an email for a passcode. Cost: an hour.</p>
+</div>
+<p><strong>Finding B (P1):</strong> "the email and passcode <em>we sent you</em>" assumes a relationship the user may not have. If they requested access two weeks ago and the email went to spam, the copy gives them nothing to act on. Add a resend path.</p>
+<p><strong>Finding C (P1):</strong> the page has <strong>no product context</strong>. A user who has never read the docs lands on a form with no indication of what Spout is. One paragraph above the fold would materially improve conversion.</p>
+
+<h3>Documentation <span class="mono" style="color:var(--ok)">[VERIFIED]</span></h3>
+<p><strong>Finding D (P2, positive):</strong> the docs structure is genuinely good. 43 pages, cleanly grouped, and the writing is unusually honest for the genre. <em>"Discipline Over Cleverness"</em> and <em>"What Borrowers Should Know"</em> do real work.</p>
+<p><strong>Finding E (P1):</strong> the docs <strong>never state the borrower's downside in a single line.</strong> §01 argues this is the most important thing to say. Right now a reader must synthesise it from three separate pages.</p>
+<p><strong>Finding F (P2):</strong> "spAssets" is introduced without a definition at point of use. The glossary has it; the borrow flow doesn't link to it.</p>
+
+<h3>Things that are right <span class="mono" style="color:var(--ok)">[VERIFIED]</span></h3>
+<ul>
+  <li><strong>Health Factor surfaced on every position, with advance notification</strong> — and the worked NVDA example is the best explanatory artefact on the site.</li>
+  <li><strong>Partial liquidation, minimum necessary.</strong> Selling 21 of 100 shares rather than the whole position is the right call.</li>
+  <li><strong>Three-layer exit</strong> (instant / FIFO / claim resale). The instant-withdrawal haircut — 0% → 3% rising as the reserve depletes — is a genuinely elegant anti-run mechanism.</li>
+</ul>
+
+<hr>
+
+<h2 id="fix"><span class="n">06</span>Recommendations, prioritised</h2>
+<table>
+  <tr><th>Pri</th><th>Recommendation</th><th>Rationale</th></tr>
+  <tr><td class="num">P0</td><td>Fix the <code>$1</code> replacement-string bug</td><td>One-line fix; corrupted numbers already spreading to AI summaries</td></tr>
+  <tr><td class="num">P0</td><td>Address crypto-ETF weekend gap risk</td><td>Highest economic severity; 27% of roster exposed</td></tr>
+  <tr><td class="num">P0</td><td>State the spAsset composability limitation</td><td>Material fact users will otherwise assume away</td></tr>
+  <tr><td class="num">P0</td><td>Pair every "0% interest" claim with the assignment trade-off</td><td>Informed consent; current wording is dangerous</td></tr>
+  <tr><td class="num">P1</td><td>Publish per-asset strike distance in σ terms</td><td>"Wider for MSTR" is not a number</td></tr>
+  <tr><td class="num">P1</td><td>Publish the backtest's worst weekly outcome per asset</td><td>The insurance-fund claim is unverifiable as written</td></tr>
+  <tr><td class="num">P1</td><td>Publish Junior yield sensitivity across vol regimes</td><td>Junior's 32% collapses in low vol; loss exposure doesn't</td></tr>
+  <tr><td class="num">P1</td><td>Publish PoR cadence and attesting party</td><td>PoR without cadence is an incomplete trust claim</td></tr>
+  <tr><td class="num">P1</td><td>Add a request-access affordance to the beta gate</td><td>The gate is currently a dead end</td></tr>
+  <tr><td class="num">P2</td><td>Publish oracle fallback path + deviation-bound numbers</td><td>"Primary" oracle implies a single point of failure</td></tr>
+  <tr><td class="num">P2</td><td>Link "spAssets" to its glossary entry at first use</td><td>Minor comprehension friction</td></tr>
+</table>
+
+<hr>
+
+<h2 id="good"><span class="n">07</span>What Spout gets right</h2>
+<p>A teardown that only finds fault is a poor teardown. Three things here are better than the category:</p>
+<div class="card ok">
+  <ol>
+    <li><strong>The VRP thesis is correctly identified and honestly described.</strong> No hand-waving, no "proprietary AI alpha" — just a well-documented structural premium and a clear-eyed account of who pays it.</li>
+    <li><strong>The risk architecture compounds correctly.</strong> Insurance fund → Junior → Senior, with the protocol itself first-loss from dollar one, is the right ordering. Most protocols put themselves last.</li>
+    <li><strong>The compliance decisions are load-bearing, not decorative.</strong> Transfer-hook KYC + Proof of Reserve + FinCEN MSB registration + shares custodied at a regulated broker is what makes "tokenized equities" mean something. This is the hard part, and Spout did it.</li>
+  </ol>
+</div>
+<p style="font-size:1.05em;margin-top:1.4rem"><strong>The core question the beta must now answer is narrow and empirical:</strong> <em>does the strike philosophy survive contact with a real crypto weekend?</em> Everything else here is fixable with a sprint.</p>
+
+<hr>
+
+<p class="foot">
+<strong>Method &amp; provenance.</strong> Prepared from live inspection of spout.finance (43 documentation pages), beta.spout.finance, and byte-level HTTP response analysis. Bug evidence is reproducible with the commands given in §04. UX findings are labelled <span class="mono">[VERIFIED]</span> vs <span class="mono">[INFERRED]</span> per §05.<br><br>
+<strong>Disclosure.</strong> Written as a submission to the Spout Finance Product Feedback bounty. No position held, no compensation received from Spout at time of writing.<br><br>
+<span style="opacity:.6">Spout Finance · Beta Teardown · September 2026</span>
+</p>
+
+</div>
+</body>
+</html>
