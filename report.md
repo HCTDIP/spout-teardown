@@ -86,6 +86,24 @@ So the asset class that is *exempt from* the gap protection is also the asset cl
 - There is no trading between Friday close and Monday open in which to adjust.
 - High-vol names get wider strikes, but the crypto complex can gap **more than a week's realised vol in a single weekend**.
 
+### Measured evidence (5 years of daily data, Yahoo Finance)
+
+Weekend gap = |Monday open − prior Friday close| ÷ prior Friday close. *Upward* gaps are the ones that threaten a covered call.
+
+| Asset | Up-gap mean | **Up-gaps >3%** | **Up-gaps >5%** | Largest up-gap |
+|---|---|---|---|---|
+| **MSTR** | 2.93% | **40.7%** | **17.1%** | 14.77% |
+| **BSOL** | 3.06% | **40.0%** | **20.0%** | 10.72% |
+| **IBIT** | 2.43% | 31.9% | 6.9% | 10.58% |
+| NVDA | 1.13% | 3.9% | 0.0% | 4.56% |
+| GOOG | 0.80% | 3.4% | 0.9% | 5.06% |
+| AAPL | 0.76% | 1.9% | 1.9% | 6.71% |
+| GLD | 0.69% | 0.8% | 0.0% | 3.35% |
+
+**The crypto-linked trio gaps upward >3% on 31–41% of weekends. The non-crypto majors do so on 0.8–3.9%.** A 10–20× difference, in the exact quantity that decides assignment. And these are *realised* distributions, not model output — MSTR has produced a single-weekend 14.77% upward gap.
+
+**Why this is worse than it looks.** Strike distance is set to keep assignment *rare*. For a name where 40% of weekends clear 3% and 17% clear 5%, maintaining that rarity requires strikes far wider than for NVDA or AAPL — and the docs state such widening exists but never quantify it. Meanwhile MSTR's 14.77% single-weekend gap would clear *any* weekly strike that could plausibly still collect meaningful premium. **The trade-off is not "wider strikes fix it" — it is "wider strikes collect less premium, which is what funds the 0% borrowing."** The borrower's subsidy and the borrower's assignment risk are directly coupled through the same parameter, and the docs do not acknowledge the coupling.
+
 **Recommendations (P0):**
 1. **Publish the per-asset strike distance in σ terms** (e.g. "1.5σ weekly"). The docs say "wider for MSTR" — that is not a number a user can reason about.
 2. **Either (a) exclude crypto-linked ETFs from weekly cadence in favour of biweekly (already supported per the docs' cycle-length machinery), or (b) shorten to a Friday→Monday cadence for these names so Friday-close → Monday-open is a *settlement boundary*, not an exposure window.**
