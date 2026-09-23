@@ -117,12 +117,12 @@ hr{border:none;border-top:1px solid var(--line);margin:2.6rem 0}
 
 <div class="kicker"><i></i>Spout Finance · Beta Teardown · Sep 2026</div>
 <h1>Spout Finance is a distribution innovation — and that may be enough</h1>
-<p class="sub">A critical teardown of the covered-call-funded, zero-interest brokerage: what the VRP thesis gets right, where the risk engineering has holes, and three bugs you can reproduce in a shell.</p>
+<p class="sub">A critical teardown of the covered-call-funded, zero-interest brokerage: what the VRP thesis gets right, where the risk engineering has holes, and four bugs you can reproduce in a shell.</p>
 
 <div class="meta">
   <span><b>Scope</b> Testnet beta + 43 doc pages</span>
   <span><b>Method</b> live inspection + byte-level HTTP analysis</span>
-  <span><b>Findings</b> 3 bugs · 11 recommendations</span>
+  <span><b>Findings</b> 4 bugs · 13 recommendations</span>
 </div>
 
 <div class="toc">
@@ -350,6 +350,21 @@ hr{border:none;border-top:1px solid var(--line);margin:2.6rem 0}
   <span class="sev warn">Bug 03 · Medium · economic</span>
   <h4>Insurance Fund under-sized as first-loss</h4>
   <p>Detailed in §02.03. The documented backtest claim and the arithmetic on a plausible single-asset gap event do not reconcile.</p>
+</div>
+
+<div class="card">
+  <span class="sev" style="background:rgba(139,152,168,.15);color:var(--dim);border:1px solid var(--line)">Bug 04 · Low · docs</span>
+  <h4>Two documentation contradictions</h4>
+  <p><strong>(a) The FAQ says lender deposits have no lockup. Junior depositors have a 45-day withdrawal notice.</strong></p>
+  <table>
+    <tr><th>Page</th><th>Statement</th></tr>
+    <tr><td><code>docs/withdrawals</code></td><td>"...designed so that lenders <strong>can always get out</strong>, even in stressed markets."</td></tr>
+    <tr><td><code>docs/lending-tranches</code></td><td>"Junior also requires a <strong>45-day notice period</strong> for withdrawals."</td></tr>
+    <tr><td><code>docs/faqs</code></td><td>"<strong>Lender deposits have no lockup.</strong>" ← wrong as written</td></tr>
+  </table>
+  <p>A Junior depositor reading only the FAQ would believe their capital is liquid. <strong>Fix:</strong> scope every statement to a tranche — *"Senior deposits have no lockup. Junior deposits carry a 45-day withdrawal notice."*</p>
+  <p style="margin-top:.8rem"><strong>(b) "All stablecoins earn the same return" is stated without listing which stablecoins, or addressing that they don't carry the same risk.</strong></p>
+  <p>Equal return for unequal risk is not equal treatment — it's a hidden subsidy from holders of the safer stablecoin to holders of the riskier one. The supported set is never enumerated.</p>
 </div>
 
 <hr>
