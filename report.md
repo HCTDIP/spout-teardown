@@ -244,6 +244,28 @@ See §2.2. **Economic, not code.** Highest-severity finding in this report.
 ### BUG-3 — Insurance Fund under-sized as first-loss
 See §2.3. **Economic, not code.**
 
+### BUG-4 — Two documentation contradictions (Low)
+
+**(a) The FAQ says lender deposits have no lockup. Junior depositors have a 45-day withdrawal notice.**
+
+| Doc page | Statement |
+|---|---|
+| `docs/withdrawals` | "The protocol maintains three layers of exit liquidity, designed so that lenders **can always get out**, even in stressed markets." |
+| `docs/lending-tranches` | "Junior also requires a **45-day notice period** for withdrawals, reflecting its role as a structural buffer for the pool." |
+| `docs/faqs` | "**Lender deposits have no lockup.**" |
+
+The `withdrawals` page's phrasing is also tranche-blind for its first sentence; only the instant-withdrawal bullet correctly scopes itself to Senior. The FAQ statement is simply wrong as written. A Junior depositor reading only the FAQ would believe their capital is liquid.
+
+**Fix:** scope every statement to a tranche. The FAQ line should read *"Senior deposits have no lockup. Junior deposits carry a 45-day withdrawal notice."*
+
+**(b) "All stablecoins earn the same return" is stated without listing which stablecoins, or addressing that they do not carry the same risk.**
+
+> *"Spout supports multiple stablecoins. All are pooled into the same liquidity layer at the protocol level and earn the same return."*
+
+Equal return for unequal risk is not equal treatment — it is a hidden subsidy from holders of the safer stablecoin to holders of the riskier one. The page also never enumerates the supported set.
+
+**Fix:** list the supported stablecoins, and either (i) note that the pool absorbs stablecoin-specific risk in aggregate, or (ii) publish any de-peg contingency.
+
 ---
 
 ## 5. UX Findings
